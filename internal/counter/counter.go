@@ -31,6 +31,7 @@ func NewSafeMap(q *queue.MaxPriorityQueue) *SafeMap {
 func (m *SafeMap) Increment(name string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	
 	item, exists := m.items[name]
 	if !exists {
 		item = &queue.Item{Name: name, Count: 1}
