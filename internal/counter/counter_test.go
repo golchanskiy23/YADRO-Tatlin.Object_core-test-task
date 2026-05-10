@@ -251,6 +251,132 @@ func writeTempFile(t *testing.T, content string) *os.File {
 	return f
 }
 
+func TestWhitespaceIgnored(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		base   []string
+		extras []string
+	}{
+		{
+			name:   "пустые строки не меняют результат",
+			base:   []string{"Миша", "Коля", "Миша"},
+			extras: []string{"", "", ""},
+		},
+		{
+			name:   "строки из пробелов не меняют результат",
+			base:   []string{"Alice", "Bob"},
+			extras: []string{"   ", "  ", " "},
+		},
+		{
+			name:   "табуляции не меняют результат",
+			base:   []string{"X", "X", "Y"},
+			extras: []string{"\t", "\t\t"},
+		},
+		{
+			name:   "смесь пробелов и табуляций",
+			base:   []string{"Ян", "Ён", "Ян"},
+			extras: []string{" \t ", "\t ", "  \t"},
+		},
+		{
+			name:   "только одно имя с пробельными строками",
+			base:   []string{"Solo"},
+			extras: []string{"", "   ", "\t"},
+		},
+		{
+			name:   "имя с двоеточием, пробельные строки игнорируются",
+			base:   []string{"a:b", "a:b", "c:d"},
+			extras: []string{"", "   "},
+		},
+		{
+			name:   "пробельные строки в начале и конце",
+			base:   []string{"Марина", "Марина"},
+			extras: []string{"   ", "\t", ""},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			q1 := queue.NewMaxPriorityQueue()
+			sm1 := NewSafeMap(q1)
+			for _, name := range tc.base {
+				sm1.Increment(name)
+			}
+			baseResult := collectCounts(t, q1)
+
+			mixed := append(tc.base, tc.extras...)
+			q2 := queue.NewMaxPriorityQueue()
+			sm2 := NewSafeMap(q2)
+			for _, line := range mixed {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					continue
+				}
+				sm2.Increment(trimmed)
+			}
+			mixedResult := collectCounts(t, q2)
+
+			if len(baseResult) != len(mixedResult) {
+				t.Fatalf("result size mismatch: base=%d, mixed=%d; base=%v, mixed=%v",
+					len(baseResult), len(mixedResult), baseResult, mixedResult)
+			}
+			for name, count := range baseResult {
+				if mixedResult[name] != count {
+					t.Errorf("count mismatch for %q: base=%d, mixed=%d", name, count, mixedResult[name])
+				}
+			}
+		})
+	}
+
+	t.Run("property: случайные имена и пробельные строки", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			names := rapid.SliceOfN(rapid.StringMatching(`[!-~А-яЁё]+`), 1, 20).Draw(rt, "names")
+
+			whitespaceLines := rapid.SliceOfN(
+				rapid.StringMatching(`[ \t\r]+`),
+				0, 10,
+			).Draw(rt, "whitespaceLines")
+
+			q1 := queue.NewMaxPriorityQueue()
+			sm1 := NewSafeMap(q1)
+			for _, name := range names {
+				sm1.Increment(name)
+			}
+			baseResult := collectCounts(t, q1)
+
+			mixed := make([]string, 0, len(names)+len(whitespaceLines))
+			mixed = append(mixed, names...)
+			mixed = append(mixed, whitespaceLines...)
+
+			q2 := queue.NewMaxPriorityQueue()
+			sm2 := NewSafeMap(q2)
+			for _, line := range mixed {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					continue
+				}
+				sm2.Increment(trimmed)
+			}
+			mixedResult := collectCounts(t, q2)
+
+			if len(baseResult) != len(mixedResult) {
+				rt.Fatalf("result size mismatch: base=%d, mixed=%d; base=%v, mixed=%v",
+					len(baseResult), len(mixedResult), baseResult, mixedResult)
+			}
+			for name, count := range baseResult {
+				if mixedResult[name] != count {
+					rt.Fatalf("count mismatch for %q: base=%d, mixed=%d", name, count, mixedResult[name])
+				}
+			}
+		})
+	})
+}
+
 func collectCounts(t *testing.T, q *queue.MaxPriorityQueue) map[string]int {
 	t.Helper()
 	result := make(map[string]int)
