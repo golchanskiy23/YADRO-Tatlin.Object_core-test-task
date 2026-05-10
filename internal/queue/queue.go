@@ -3,7 +3,6 @@ package queue
 import (
 	"container/heap"
 	"fmt"
-	"sync"
 )
 
 type ErrEmptyQueue struct{}
@@ -61,7 +60,6 @@ func (h *maxHeap) Pop() any {
 }
 
 type MaxPriorityQueue struct {
-	mu   sync.Mutex
 	heap maxHeap
 }
 
@@ -72,24 +70,19 @@ func NewMaxPriorityQueue() *MaxPriorityQueue {
 }
 
 func (q *MaxPriorityQueue) Push(item *Item) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
 	heap.Push(&q.heap, item)
 }
 
-func (q *MaxPriorityQueue) Fix(item *Item) error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
+func (q *MaxPriorityQueue) IncrementAndFix(item *Item) error {
 	if item.index < 0 || item.index >= len(q.heap) {
 		return &ErrInvalidIndex{Name: item.Name, Index: item.index}
 	}
+	item.Count++
 	heap.Fix(&q.heap, item.index)
 	return nil
 }
 
 func (q *MaxPriorityQueue) Pop() (*Item, error) {
-	q.mu.Lock()
-	defer q.mu.Unlock()
 	if len(q.heap) == 0 {
 		return nil, &ErrEmptyQueue{}
 	}
@@ -97,7 +90,5 @@ func (q *MaxPriorityQueue) Pop() (*Item, error) {
 }
 
 func (q *MaxPriorityQueue) Len() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
 	return q.heap.Len()
 }
