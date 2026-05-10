@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"sync"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -10,123 +9,86 @@ import (
 func TestQueueOrder(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name string
-	}{
-		{"property_queue_order"},
-	}
+	rapid.Check(t, func(rt *rapid.T) {
+		n := rapid.IntRange(1, 50).Draw(rt, "n")
+		names := rapid.SliceOfN(
+			rapid.StringMatching(`[a-zA-Zа-яА-ЯёЁ]{1,20}`),
+			n, n,
+		).Draw(rt, "names")
+		counts := rapid.SliceOfN(rapid.IntRange(1, 100), n, n).Draw(rt, "counts")
 
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+		q := NewMaxPriorityQueue()
+		for i := 0; i < n; i++ {
+			q.Push(&Item{Name: names[i], Count: counts[i]})
+		}
 
-			rapid.Check(t, func(rt *rapid.T) {
-				n := rapid.IntRange(1, 50).Draw(rt, "n")
-				names := rapid.SliceOfN(
-					rapid.StringMatching(`[a-zA-Zа-яА-ЯёЁ]{1,20}`),
-					n, n,
-				).Draw(rt, "names")
-				counts := rapid.SliceOfN(rapid.IntRange(1, 100), n, n).Draw(rt, "counts")
-
-				q := NewMaxPriorityQueue()
-				for i := 0; i < n; i++ {
-					q.Push(&Item{Name: names[i], Count: counts[i]})
+		var prev *Item
+		for q.Len() > 0 {
+			cur, err := q.Pop()
+			if err != nil {
+				rt.Fatalf("Pop() error: %v", err)
+			}
+			if prev != nil {
+				if cur.Count > prev.Count {
+					rt.Fatalf("order violation: got Count=%d after Count=%d", cur.Count, prev.Count)
 				}
-
-				var prev *Item
-				for q.Len() > 0 {
-					cur, err := q.Pop()
-					if err != nil {
-						rt.Fatalf("Pop() error: %v", err)
-					}
-					if prev != nil {
-						if cur.Count > prev.Count {
-							rt.Fatalf("order violation: got Count=%d after Count=%d", cur.Count, prev.Count)
-						}
-						if cur.Count == prev.Count && cur.Name < prev.Name {
-							rt.Fatalf("order violation at equal count: got Name=%q after Name=%q", cur.Name, prev.Name)
-						}
-					}
-					prev = cur
+				if cur.Count == prev.Count && cur.Name < prev.Name {
+					rt.Fatalf("order violation at equal count: got Name=%q after Name=%q", cur.Name, prev.Name)
 				}
-			})
-		})
-	}
+			}
+			prev = cur
+		}
+	})
 }
 
-func TestQueueConcurrency(t *testing.T) {
+func TestIncrementAndFixOrder(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name string
-	}{
-		{"property_queue_concurrency"},
-	}
+	rapid.Check(t, func(rt *rapid.T) {
+		n := rapid.IntRange(1, 30).Draw(rt, "n")
+		names := rapid.SliceOfNDistinct(
+			rapid.StringMatching(`[a-zA-Zа-яА-ЯёЁ]{1,15}`),
+			n, n, func(s string) string { return s },
+		).Draw(rt, "names")
 
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
+		q := NewMaxPriorityQueue()
+		items := make([]*Item, n)
+		for i, name := range names {
+			items[i] = &Item{Name: name, Count: 1}
+			q.Push(items[i])
+		}
 
-			rapid.Check(t, func(rt *rapid.T) {
-				numGoroutines := rapid.IntRange(2, 8).Draw(rt, "numGoroutines")
-				itemsPerGoroutine := rapid.IntRange(1, 10).Draw(rt, "itemsPerGoroutine")
-				n := numGoroutines * itemsPerGoroutine
-
-				names := rapid.SliceOfN(
-					rapid.StringMatching(`[a-zA-Zа-яА-ЯёЁ]{1,15}`),
-					n, n,
-				).Draw(rt, "names")
-				counts := rapid.SliceOfN(rapid.IntRange(1, 50), n, n).Draw(rt, "counts")
-
-				q := NewMaxPriorityQueue()
-				goroutineItems := make([][]*Item, numGoroutines)
-				for g := 0; g < numGoroutines; g++ {
-					goroutineItems[g] = make([]*Item, itemsPerGoroutine)
-					for k := 0; k < itemsPerGoroutine; k++ {
-						idx := g*itemsPerGoroutine + k
-						item := &Item{Name: names[idx], Count: counts[idx]}
-						goroutineItems[g][k] = item
-						q.Push(item)
-					}
+		increments := rapid.SliceOfN(rapid.IntRange(0, 10), n, n).Draw(rt, "increments")
+		for i, inc := range increments {
+			for k := 0; k < inc; k++ {
+				if err := q.IncrementAndFix(items[i]); err != nil {
+					rt.Fatalf("IncrementAndFix error: %v", err)
 				}
+			}
+		}
 
-				var wg sync.WaitGroup
-				for g := 0; g < numGoroutines; g++ {
-					wg.Add(1)
-					go func(id int, ownedItems []*Item) {
-						defer wg.Done()
-						if id%2 == 0 {
-							for _, item := range ownedItems {
-								_ = q.Fix(item)
-							}
-						} else {
-							for range ownedItems {
-								_, _ = q.Pop()
-							}
-						}
-					}(g, goroutineItems[g])
-				}
-				wg.Wait()
+		for i, item := range items {
+			want := 1 + increments[i]
+			if item.Count != want {
+				rt.Fatalf("item %q: Count=%d, want %d", item.Name, item.Count, want)
+			}
+		}
 
-				var prev *Item
-				for q.Len() > 0 {
-					cur, err := q.Pop()
-					if err != nil {
-						rt.Fatalf("Pop() error after concurrent ops: %v", err)
-					}
-					if prev != nil {
-						if cur.Count > prev.Count {
-							rt.Fatalf("ordering violated after concurrent ops: Count=%d after Count=%d", cur.Count, prev.Count)
-						}
-						if cur.Count == prev.Count && cur.Name < prev.Name {
-							rt.Fatalf("ordering violated after concurrent ops: Name=%q after Name=%q at equal count", cur.Name, prev.Name)
-						}
-					}
-					prev = cur
+		var prev *Item
+		for q.Len() > 0 {
+			cur, err := q.Pop()
+			if err != nil {
+				rt.Fatalf("Pop() error: %v", err)
+			}
+			if prev != nil {
+				if cur.Count > prev.Count {
+					rt.Fatalf("order violation after IncrementAndFix: Count=%d after Count=%d", cur.Count, prev.Count)
 				}
-			})
-		})
-	}
+				if cur.Count == prev.Count && cur.Name < prev.Name {
+					rt.Fatalf("order violation at equal count: Name=%q after Name=%q", cur.Name, prev.Name)
+				}
+			}
+			prev = cur
+		}
+	})
 }

@@ -1,18 +1,25 @@
-BINARY := name-frequency-counter
-GO     := go
-
 .PHONY: build test lint clean run
 
 build:
-	$(GO) build -o $(BINARY) .
+	go build -o name-frequency-counter ./cmd/
+
+test-race:
+	go test -race ./...
+
+test-cover:
+	go test -cover ./...
 
 test:
-	$(GO) test -race ./...
+	go test ./...
 
 lint:
 	golangci-lint run ./...
 
 clean:
-	rm -f $(BINARY)
+	rm -f name-frequency-counter
 
-run: build ./$(BINARY) count $(FILE)
+# Usage:
+#   make run FILE=names.txt
+#   make run FILE=names.txt TOP=10
+run: 
+	go run ./cmd/main.go count $(if $(TOP),--top $(TOP),) $(FILE)

@@ -107,7 +107,7 @@ func (p *Parser) Split(n int) SplitResponse {
 				return size, nil
 			}
 			if err != nil {
-				return pos, err
+				return pos, fmt.Errorf("parser: read byte at %d: %w", pos, err)
 			}
 			if readBuf[0] == '\n' {
 				return pos + 1, nil

@@ -31,17 +31,16 @@ func NewSafeMap(q *queue.MaxPriorityQueue) *SafeMap {
 
 func (m *SafeMap) Increment(name string) {
 	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	item, exists := m.items[name]
 	if !exists {
 		item = &queue.Item{Name: name, Count: 1}
 		m.items[name] = item
-		m.mu.Unlock()
 		m.q.Push(item)
 		return
 	}
-	item.Count++
-	m.mu.Unlock()
-	m.q.Fix(item) //nolint:errcheck
+	m.q.IncrementAndFix(item) //nolint:errcheck // index is always valid: item was inserted by this SafeMap
 }
 
 func NewWorkerPool(f *os.File, chunks []parser.Chunk, sm *SafeMap) *WorkerPool {

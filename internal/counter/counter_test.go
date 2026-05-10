@@ -3,6 +3,7 @@ package counter
 import (
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -292,7 +293,9 @@ func TestWhitespaceIgnored(t *testing.T) {
 			}
 			baseResult := collectCounts(t, q1)
 
-			mixed := append(tc.base, tc.extras...)
+			mixed := make([]string, len(tc.base)+len(tc.extras))
+			copy(mixed, tc.base)
+			mixed = append(mixed[:len(tc.base)], tc.extras...)
 			q2 := queue.NewMaxPriorityQueue()
 			sm2 := NewSafeMap(q2)
 			for _, line := range mixed {
@@ -424,5 +427,47 @@ func TestCasePreserved(t *testing.T) {
 				rt.Fatalf("case not preserved: got %q, want %q", item.Name, name)
 			}
 		})
+	})
+}
+
+func TestSafeMapConcurrency(t *testing.T) {
+	t.Parallel()
+
+	rapid.Check(t, func(rt *rapid.T) {
+		numGoroutines := rapid.IntRange(2, 8).Draw(rt, "numGoroutines")
+		names := rapid.SliceOfNDistinct(
+			rapid.StringMatching(`[a-zA-Zа-яА-ЯёЁ]{2,10}`),
+			numGoroutines, numGoroutines,
+			func(s string) string { return s },
+		).Draw(rt, "names")
+		callsPerGoroutine := rapid.IntRange(1, 20).Draw(rt, "callsPerGoroutine")
+
+		q := queue.NewMaxPriorityQueue()
+		sm := NewSafeMap(q)
+
+		var wg sync.WaitGroup
+		for g := 0; g < numGoroutines; g++ {
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				for i := 0; i < callsPerGoroutine; i++ {
+					sm.Increment(name)
+				}
+			}(names[g])
+		}
+		wg.Wait()
+
+		total := 0
+		for q.Len() > 0 {
+			item, err := q.Pop()
+			if err != nil {
+				rt.Fatalf("Pop() error: %v", err)
+			}
+			total += item.Count
+		}
+		want := numGoroutines * callsPerGoroutine
+		if total != want {
+			rt.Fatalf("count invariant violated: got %d, want %d", total, want)
+		}
 	})
 }

@@ -1,0 +1,39 @@
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - goimports
+    - misspell
+    - godot
+    - noctx
+    - bodyclose
+    - gocritic
+    - revive
+    - exhaustive
+    - wrapcheck
+    - errorlint
+
+linters-settings:
+  godot:
+    scope: declarations
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+  revive:
+    rules:
+      - name: exported
+        arguments:
+          - disableStutteringCheck
+
+issues:
+  exclude-rules:
+    - path: "_test\\.go"
+      linters:
+        - wrapcheck
+        - godot
