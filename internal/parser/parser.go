@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"bytes"
 )
+
+const alignBufSize = 4096
 
 type ErrStatFailed struct {
 	Path string
@@ -70,6 +73,33 @@ func NewParser(path string) *Parser {
 	return &Parser{path: path}
 }
 
+func alignToNewline(f *os.File, pos, size int64) (int64, error) {
+	if pos >= size {
+		return size, nil
+	}
+	buf := make([]byte, alignBufSize)
+	for pos < size {
+		toRead := int64(alignBufSize)
+		if pos+toRead > size {
+			toRead = size - pos
+		}
+		n, err := f.ReadAt(buf[:toRead], pos)
+		if n > 0 {
+			if idx := bytes.IndexByte(buf[:n], '\n'); idx >= 0 {
+				return pos + int64(idx) + 1, nil
+			}
+			pos += int64(n)
+		}
+		if err == io.EOF {
+			return size, nil
+		}
+		if err != nil {
+			return pos, fmt.Errorf("parser: read bytes at %d: %w", pos, err)
+		}
+	}
+	return size, nil
+}
+
 func (p *Parser) Split(n int) SplitResponse {
 	info, err := os.Stat(p.path)
 	if err != nil {
@@ -95,31 +125,8 @@ func (p *Parser) Split(n int) SplitResponse {
 		chunkSize = 1
 	}
 
-	readBuf := make([]byte, 1)
-
-	alignToNewline := func(pos int64) (int64, error) {
-		if pos >= size {
-			return size, nil
-		}
-		for {
-			_, err := f.ReadAt(readBuf, pos)
-			if err == io.EOF {
-				return size, nil
-			}
-			if err != nil {
-				return pos, err
-			}
-			if readBuf[0] == '\n' {
-				return pos + 1, nil
-			}
-			pos++
-			if pos >= size {
-				return size, nil
-			}
-		}
-	}
-
 	var chunks []Chunk
+	prevEnd := int64(0)
 
 	for i := 0; i < n; i++ {
 		start := int64(i) * chunkSize
@@ -131,7 +138,7 @@ func (p *Parser) Split(n int) SplitResponse {
 		}
 
 		if i > 0 {
-			aligned, err := alignToNewline(start - 1)
+			aligned, err := alignToNewline(f, start-1, size)
 			if err != nil {
 				f.Close()
 				return SplitResponse{Err: &ErrAlignFailed{Boundary: "start", Err: err}}
@@ -140,7 +147,7 @@ func (p *Parser) Split(n int) SplitResponse {
 		}
 
 		if i < n-1 {
-			aligned, err := alignToNewline(end - 1)
+			aligned, err := alignToNewline(f, end-1, size)
 			if err != nil {
 				f.Close()
 				return SplitResponse{Err: &ErrAlignFailed{Boundary: "end", Err: err}}
@@ -148,18 +155,16 @@ func (p *Parser) Split(n int) SplitResponse {
 			end = aligned
 		}
 
+		if start < prevEnd {
+			start = prevEnd
+		}
+
 		if start >= end {
 			continue
 		}
 
-		if len(chunks) > 0 {
-			last := chunks[len(chunks)-1]
-			if last.Start == start && last.End == end {
-				continue
-			}
-		}
-
 		chunks = append(chunks, Chunk{Start: start, End: end})
+		prevEnd = end
 	}
 
 	return SplitResponse{Chunk: chunks, File: f}
