@@ -1,4 +1,4 @@
-module name-frequency-counter
+module github.com/golchanskiy23/name-frequency-counter
 
 go 1.23
 
