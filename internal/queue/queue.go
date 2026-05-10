@@ -61,9 +61,13 @@ func (q *MaxPriorityQueue) Push(item *Item) {
 	heap.Push(&q.heap, item)
 }
 
-func (q *MaxPriorityQueue) Fix(item *Item) {
+// Fix increments item.Count by delta and restores heap ordering.
+// Both the count update and the heap fix happen under the same lock,
+// preventing data races between writers and concurrent heap operations.
+func (q *MaxPriorityQueue) Fix(item *Item, delta int) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	item.Count += delta
 	heap.Fix(&q.heap, item.index)
 }
 
