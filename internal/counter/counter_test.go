@@ -39,10 +39,6 @@ func TestCountInvariant(t *testing.T) {
 			lines: []string{"X", "X", "X", "X", "X"},
 		},
 		{
-			name:  "имя с двоеточием",
-			lines: []string{"a:b", "a:b", "c:d"},
-		},
-		{
 			name:  "UTF-8 имена",
 			lines: []string{"Ян", "Ян", "Ён", "Ён", "Ён"},
 		},
@@ -61,7 +57,7 @@ func TestCountInvariant(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			lines := rapid.SliceOf(
 				rapid.OneOf(
-					rapid.StringMatching(`\S+`),
+					rapid.StringMatching(`\p{L}+`),
 					rapid.Just(""),
 					rapid.Just("   "),
 					rapid.Just("\t"),
@@ -82,7 +78,7 @@ func runInvariantCheck(t *testing.T, lines []string) {
 	expected := 0
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
+		if !isValidName(trimmed) {
 			continue
 		}
 		expected++
@@ -138,13 +134,6 @@ func TestWorkerPoolRun(t *testing.T) {
 			},
 		},
 		{
-			name:    "имя с двоеточием",
-			content: "a:b\na:b",
-			wantSums: map[string]int{
-				"a:b": 2,
-			},
-		},
-		{
 			name:    "UTF-8",
 			content: "Ян\nЁн\nЯн",
 			wantSums: map[string]int{
@@ -194,7 +183,7 @@ func TestWorkerPoolRunInvariant(t *testing.T) {
 	t.Parallel()
 
 	rapid.Check(t, func(rt *rapid.T) {
-		names := rapid.SliceOfN(rapid.StringMatching(`\S+`), 1, 20).Draw(rt, "names")
+		names := rapid.SliceOfN(rapid.StringMatching(`\p{L}+`), 1, 20).Draw(rt, "names")
 
 		content := strings.Join(names, "\n")
 		f := writeTempFile(t, content)
@@ -285,11 +274,6 @@ func TestWhitespaceIgnored(t *testing.T) {
 			extras: []string{"", "   ", "\t"},
 		},
 		{
-			name:   "имя с двоеточием, пробельные строки игнорируются",
-			base:   []string{"a:b", "a:b", "c:d"},
-			extras: []string{"", "   "},
-		},
-		{
 			name:   "пробельные строки в начале и конце",
 			base:   []string{"Марина", "Марина"},
 			extras: []string{"   ", "\t", ""},
@@ -313,7 +297,7 @@ func TestWhitespaceIgnored(t *testing.T) {
 			sm2 := NewSafeMap(q2)
 			for _, line := range mixed {
 				trimmed := strings.TrimSpace(line)
-				if trimmed == "" {
+				if !isValidName(trimmed) {
 					continue
 				}
 				sm2.Increment(trimmed)
@@ -335,7 +319,7 @@ func TestWhitespaceIgnored(t *testing.T) {
 	t.Run("property: случайные имена и пробельные строки", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
-			names := rapid.SliceOfN(rapid.StringMatching(`[!-~А-яЁё]+`), 1, 20).Draw(rt, "names")
+			names := rapid.SliceOfN(rapid.StringMatching(`\p{L}+`), 1, 20).Draw(rt, "names")
 
 			whitespaceLines := rapid.SliceOfN(
 				rapid.StringMatching(`[ \t\r]+`),
@@ -357,7 +341,7 @@ func TestWhitespaceIgnored(t *testing.T) {
 			sm2 := NewSafeMap(q2)
 			for _, line := range mixed {
 				trimmed := strings.TrimSpace(line)
-				if trimmed == "" {
+				if !isValidName(trimmed) {
 					continue
 				}
 				sm2.Increment(trimmed)
@@ -402,8 +386,6 @@ func TestCasePreserved(t *testing.T) {
 		{name: "нижний регистр", input: "alice"},
 		{name: "кириллица верхний", input: "МИША"},
 		{name: "кириллица смешанный", input: "МиШа"},
-		{name: "только цифры и буквы", input: "User123"},
-		{name: "имя с двоеточием и регистром", input: "A:B"},
 	}
 
 	for _, tc := range cases {
@@ -428,7 +410,7 @@ func TestCasePreserved(t *testing.T) {
 	t.Run("property: регистр сохраняется для любого имени", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
-			name := rapid.StringMatching(`\S+`).Draw(rt, "name")
+			name := rapid.StringMatching(`\p{L}+`).Draw(rt, "name")
 
 			q := queue.NewMaxPriorityQueue()
 			sm := NewSafeMap(q)

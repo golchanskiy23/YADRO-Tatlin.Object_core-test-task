@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"unicode"
 
 	"name-frequency-counter/internal/parser"
 	"name-frequency-counter/internal/queue"
@@ -51,6 +52,18 @@ func NewWorkerPool(f *os.File, chunks []parser.Chunk, sm *SafeMap) *WorkerPool {
 	}
 }
 
+func isValidName(s string) bool {
+	if strings.TrimSpace(s) == "" {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.IsLetter(r) && r != ' ' {
+			return false
+		}
+	}
+	return true
+}
+
 func (wp *WorkerPool) Run() {
 	var wg sync.WaitGroup
 	for _, chunk := range wp.chunks {
@@ -64,7 +77,7 @@ func (wp *WorkerPool) Run() {
 			lines := strings.Split(string(data), "\n")
 			for _, line := range lines {
 				trimmed := strings.TrimSpace(line)
-				if trimmed == "" {
+				if !isValidName(trimmed) {
 					continue
 				}
 				wp.safeMap.Increment(trimmed)
