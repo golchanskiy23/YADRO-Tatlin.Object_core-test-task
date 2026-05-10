@@ -1,10 +1,10 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
-	"bytes"
 )
 
 const alignBufSize = 4096
