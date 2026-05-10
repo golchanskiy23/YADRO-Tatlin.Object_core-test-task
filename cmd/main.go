@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"github.com/spf13/cobra"
+	"fmt"
+	"os"
 )
 
 var rootCmd = &cobra.Command{
