@@ -390,8 +390,6 @@ func collectCounts(t *testing.T, q *queue.MaxPriorityQueue) map[string]int {
 	return result
 }
 
-// Feature: name-frequency-counter, Property 3: Регистр имён сохраняется без изменений
-// Validates: Requirements 3.3
 func TestCasePreserved(t *testing.T) {
 	t.Parallel()
 
@@ -430,7 +428,6 @@ func TestCasePreserved(t *testing.T) {
 	t.Run("property: регистр сохраняется для любого имени", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
-			// Generate names that contain at least one non-whitespace character
 			name := rapid.StringMatching(`\S+`).Draw(rt, "name")
 
 			q := queue.NewMaxPriorityQueue()
