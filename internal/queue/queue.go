@@ -2,8 +2,24 @@ package queue
 
 import (
 	"container/heap"
+	"fmt"
 	"sync"
 )
+
+type ErrEmptyQueue struct{}
+
+func (e *ErrEmptyQueue) Error() string {
+	return "queue: pop from empty queue"
+}
+
+type ErrInvalidIndex struct {
+	Name  string
+	Index int
+}
+
+func (e *ErrInvalidIndex) Error() string {
+	return fmt.Sprintf("queue: fix item %q: invalid index %d", e.Name, e.Index)
+}
 
 type Item struct {
 	Name  string
@@ -61,23 +77,23 @@ func (q *MaxPriorityQueue) Push(item *Item) {
 	heap.Push(&q.heap, item)
 }
 
-// Fix increments item.Count by delta and restores heap ordering.
-// Both the count update and the heap fix happen under the same lock,
-// preventing data races between writers and concurrent heap operations.
-func (q *MaxPriorityQueue) Fix(item *Item, delta int) {
+func (q *MaxPriorityQueue) Fix(item *Item) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	item.Count += delta
+	if item.index < 0 || item.index >= len(q.heap) {
+		return &ErrInvalidIndex{Name: item.Name, Index: item.index}
+	}
 	heap.Fix(&q.heap, item.index)
+	return nil
 }
 
-func (q *MaxPriorityQueue) Pop() *Item {
+func (q *MaxPriorityQueue) Pop() (*Item, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if len(q.heap) == 0 {
-		return nil
+		return nil, &ErrEmptyQueue{}
 	}
-	return heap.Pop(&q.heap).(*Item)
+	return heap.Pop(&q.heap).(*Item), nil
 }
 
 func (q *MaxPriorityQueue) Len() int {
