@@ -389,3 +389,61 @@ func collectCounts(t *testing.T, q *queue.MaxPriorityQueue) map[string]int {
 	}
 	return result
 }
+
+// Feature: name-frequency-counter, Property 3: Регистр имён сохраняется без изменений
+// Validates: Requirements 3.3
+func TestCasePreserved(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		input string
+	}{
+		{name: "верхний регистр", input: "ALICE"},
+		{name: "смешанный регистр", input: "AlIcE"},
+		{name: "нижний регистр", input: "alice"},
+		{name: "кириллица верхний", input: "МИША"},
+		{name: "кириллица смешанный", input: "МиШа"},
+		{name: "только цифры и буквы", input: "User123"},
+		{name: "имя с двоеточием и регистром", input: "A:B"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			q := queue.NewMaxPriorityQueue()
+			sm := NewSafeMap(q)
+			sm.Increment(tc.input)
+
+			item, err := q.Pop()
+			if err != nil {
+				t.Fatalf("unexpected error popping from queue: %v", err)
+			}
+			if item.Name != tc.input {
+				t.Fatalf("case not preserved: got %q, want %q", item.Name, tc.input)
+			}
+		})
+	}
+
+	t.Run("property: регистр сохраняется для любого имени", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			// Generate names that contain at least one non-whitespace character
+			name := rapid.StringMatching(`\S+`).Draw(rt, "name")
+
+			q := queue.NewMaxPriorityQueue()
+			sm := NewSafeMap(q)
+			sm.Increment(name)
+
+			item, err := q.Pop()
+			if err != nil {
+				rt.Fatalf("unexpected error popping from queue: %v", err)
+			}
+			if item.Name != name {
+				rt.Fatalf("case not preserved: got %q, want %q", item.Name, name)
+			}
+		})
+	})
+}
