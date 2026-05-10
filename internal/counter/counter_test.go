@@ -7,8 +7,8 @@ import (
 
 	"pgregory.net/rapid"
 
-	"name-frequency-counter/internal/parser"
-	"name-frequency-counter/internal/queue"
+	"github.com/golchanskiy23/name-frequency-counter/internal/parser"
+	"github.com/golchanskiy23/name-frequency-counter/internal/queue"
 )
 
 func TestCountInvariant(t *testing.T) {

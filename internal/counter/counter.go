@@ -6,8 +6,8 @@ import (
 	"sync"
 	"unicode"
 
-	"name-frequency-counter/internal/parser"
-	"name-frequency-counter/internal/queue"
+	"github.com/golchanskiy23/name-frequency-counter/internal/parser"
+	"github.com/golchanskiy23/name-frequency-counter/internal/queue"
 )
 
 type SafeMap struct {

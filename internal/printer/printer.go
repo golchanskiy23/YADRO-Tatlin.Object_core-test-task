@@ -3,7 +3,7 @@ package printer
 import (
 	"fmt"
 
-	"name-frequency-counter/internal/queue"
+	"github.com/golchanskiy23/name-frequency-counter/internal/queue"
 )
 
 func Format(item *queue.Item) string {

@@ -8,7 +8,7 @@ import (
 
 	"pgregory.net/rapid"
 
-	"name-frequency-counter/internal/queue"
+	"github.com/golchanskiy23/name-frequency-counter/internal/queue"
 )
 
 func nameGen() *rapid.Generator[string] {

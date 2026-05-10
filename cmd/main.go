@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"name-frequency-counter/internal/counter"
-	"name-frequency-counter/internal/parser"
-	"name-frequency-counter/internal/printer"
-	"name-frequency-counter/internal/queue"
+	"github.com/golchanskiy23/name-frequency-counter/internal/counter"
+	"github.com/golchanskiy23/name-frequency-counter/internal/parser"
+	"github.com/golchanskiy23/name-frequency-counter/internal/printer"
+	"github.com/golchanskiy23/name-frequency-counter/internal/queue"
 )
 
 var (
@@ -46,7 +46,6 @@ func runCount(cmd *cobra.Command, args []string) error {
 		return resp.Err
 	}
 
-	// Empty file — print nothing and exit 0.
 	if len(resp.Chunk) == 0 {
 		return nil
 	}
@@ -59,7 +58,6 @@ func runCount(cmd *cobra.Command, args []string) error {
 	wp := counter.NewWorkerPool(f, resp.Chunk, sm)
 	wp.Run()
 
-	// Determine output writer: stdout by default, file if --output is set.
 	var out io.Writer = os.Stdout
 	if outputPath != "" {
 		outFile, err := os.Create(outputPath)
@@ -70,7 +68,6 @@ func runCount(cmd *cobra.Command, args []string) error {
 		out = outFile
 	}
 
-	// Drain the priority queue.
 	limit := topN
 	for q.Len() > 0 {
 		item, err := q.Pop()
